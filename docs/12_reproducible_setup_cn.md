@@ -28,6 +28,24 @@ notepad configs\deepseek_api_key.txt
 
 `.env` 和 `configs\deepseek_api_key.txt` 都被 `.gitignore` 排除，不会进入仓库。
 
+## 模型包下载
+
+如果你要复现当前默认的日文 RVC 音色，可以下载 GitHub Release 模型包：
+
+- Release: [Hoshino JP Daily RVC 40k v1 model package](https://github.com/yiling1-bot/takanashi-hoshino-realtime-voice-lab/releases/tag/model-hoshino-jp-daily-rvc-40k-v1)
+- Download: [hoshino_jp_daily_rvc_40k_v1.zip](https://github.com/yiling1-bot/takanashi-hoshino-realtime-voice-lab/releases/download/model-hoshino-jp-daily-rvc-40k-v1/hoshino_jp_daily_rvc_40k_v1.zip)
+- SHA256: `969AAD13BFE3F4462DCDB4A995DE682320BFCF5CB00EF7B55B20E8E4975E1ABD`
+
+下载后解压：
+
+```text
+hoshino_jp_daily_rvc_40k_v1.pth
+  -> <RVC WebUI>\assets\weights\
+
+hoshino_jp_daily_rvc_40k_v1_IVF2283_Flat_nprobe_1_hoshino_jp_daily_rvc_40k_v1_v2.index
+  -> <RVC WebUI>\assets\indices\
+```
+
 ## .env 需要改什么
 
 最重要的是这三项：

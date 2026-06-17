@@ -50,6 +50,34 @@ This is an unofficial local research and fan-project template. Use only audio, m
 - DeepSeek API
 - 本地 RVC WebUI 模型权重和 index 文件
 
+## Model Weights
+
+The code repository does not store model weights in Git, but an optional model package is available as a GitHub Release asset:
+
+- Release: [Hoshino JP Daily RVC 40k v1 model package](https://github.com/yiling1-bot/takanashi-hoshino-realtime-voice-lab/releases/tag/model-hoshino-jp-daily-rvc-40k-v1)
+- Download: [hoshino_jp_daily_rvc_40k_v1.zip](https://github.com/yiling1-bot/takanashi-hoshino-realtime-voice-lab/releases/download/model-hoshino-jp-daily-rvc-40k-v1/hoshino_jp_daily_rvc_40k_v1.zip)
+- Size: 145.29 MB
+- SHA256: `969AAD13BFE3F4462DCDB4A995DE682320BFCF5CB00EF7B55B20E8E4975E1ABD`
+
+After downloading, unzip the package and place:
+
+```text
+hoshino_jp_daily_rvc_40k_v1.pth
+  -> <RVC WebUI>\assets\weights\
+
+hoshino_jp_daily_rvc_40k_v1_IVF2283_Flat_nprobe_1_hoshino_jp_daily_rvc_40k_v1_v2.index
+  -> <RVC WebUI>\assets\indices\
+```
+
+Then set these values in `.env`:
+
+```text
+HOSHINO_RVC_MODEL=hoshino_jp_daily_rvc_40k_v1.pth
+HOSHINO_RVC_INDEX=<RVC WebUI>\assets\indices\hoshino_jp_daily_rvc_40k_v1_IVF2283_Flat_nprobe_1_hoshino_jp_daily_rvc_40k_v1_v2.index
+```
+
+中文说明：代码仓库本身不把模型权重放进 Git，但现在提供了 GitHub Release 模型包。下载 zip 后，把 `.pth` 放到 RVC WebUI 的 `assets\weights\`，把 `.index` 放到 `assets\indices\`，再在 `.env` 里配置 `HOSHINO_RVC_MODEL` 和 `HOSHINO_RVC_INDEX`。
+
 ## Quick Start
 
 ### 1. Clone
