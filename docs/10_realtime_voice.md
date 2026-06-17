@@ -69,7 +69,6 @@ POST /v1/audio/speech
 - `models/checkpoints/`
 - `models/exported/`
 - `outputs/`
-- 生成的 `snapshots/**/*.wav`
 
 需要用户自己准备：
 
