@@ -61,7 +61,7 @@ REALTIME_WEB_PATH = PROJECT_DIR / "web" / "realtime.html"
 CHAT_CONFIG_PATH = Path(
     os.environ.get("HOSHINO_CHAT_CONFIG", str(PROJECT_DIR / "configs" / "chat_tts_config.json"))
 )
-API_BUILD = "chat_tts_persistent_rvc_warm_20260617_026_openai_speech"
+API_BUILD = "chat_tts_persistent_rvc_warm_20260617_027_open_webui"
 WHISPER_MODEL_NAME = os.environ.get("HOSHINO_WHISPER_MODEL", "tiny")
 WHISPER_DEVICE = os.environ.get("HOSHINO_WHISPER_DEVICE", "cpu")
 WHISPER_COMPUTE_TYPE = os.environ.get("HOSHINO_WHISPER_COMPUTE_TYPE", "int8")
@@ -1108,6 +1108,33 @@ def openai_audio_speech(req: OpenAISpeechRequest) -> FileResponse:
             "X-Hoshino-OpenAI-Compatible": "true",
         },
     )
+
+
+@app.get("/v1/models")
+def openai_models() -> dict[str, object]:
+    return {
+        "object": "list",
+        "data": [
+            {
+                "id": "hoshino-rvc-tts",
+                "object": "model",
+                "created": 0,
+                "owned_by": "local",
+            }
+        ],
+    }
+
+
+@app.get("/v1/audio/voices")
+def openai_audio_voices() -> dict[str, object]:
+    return {
+        "voices": [
+            "alloy",
+            "hoshino",
+            "ja-JP-NanamiNeural",
+            "zh-CN-XiaoyiNeural",
+        ]
+    }
 
 
 @app.post("/api/v1/voice-chat", response_model=VoiceChatResponse)

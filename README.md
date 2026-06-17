@@ -178,3 +178,7 @@ snapshots/    调参快照，音频默认不提交
 当前主路径是 `TTS -> RVC voice conversion`，所以自然度主要受基础 TTS、停顿切分、语速、音高和 RVC index rate 影响。低延迟交互优先使用常驻 RVC；如果显存不够，可以设置 `HOSHINO_RVC_PERSISTENT=false` 回退到命令行转换。
 
 更多细节见 [docs/10_realtime_voice.md](docs/10_realtime_voice.md)。
+
+## 接入其他项目
+
+- [Open WebUI 中文接入教程](docs/11_open_webui_cn.md)

@@ -73,6 +73,15 @@ with client.audio.speech.with_streaming_response.create(
     response.stream_to_file("hoshino.mp3")
 ```
 
+为了兼容 Open WebUI 这类前端，还提供：
+
+```http
+GET /v1/models
+GET /v1/audio/voices
+```
+
+`/v1/models` 返回本地 TTS 模型占位信息，`/v1/audio/voices` 返回可填写的 voice 名称列表。
+
 ### 原生接口
 
 ```http
