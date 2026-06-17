@@ -3,19 +3,57 @@ param(
     [string]$HostAddress = "127.0.0.1",
     [int]$Port = 7860,
     [string]$RvcRepoDir = "",
-    [string]$RvcModel = "hoshino_jp_daily_rvc_40k_v1.pth",
+    [string]$RvcModel = "",
     [string]$RvcIndex = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+function Import-DotEnv {
+    param([string]$Path)
+    if (-not (Test-Path $Path)) { return }
+    Get-Content $Path | ForEach-Object {
+        $line = $_.Trim()
+        if (-not $line -or $line.StartsWith("#") -or $line -notmatch "=") { return }
+        $name, $value = $line.Split("=", 2)
+        $name = $name.Trim()
+        $value = $value.Trim().Trim('"').Trim("'")
+        if ($name) {
+            [Environment]::SetEnvironmentVariable($name, $value, "Process")
+        }
+    }
+}
+
 if (-not $ProjectDir) {
     $ProjectDir = Split-Path $PSScriptRoot -Parent
 }
+Import-DotEnv (Join-Path $ProjectDir ".env")
+if (-not $PSBoundParameters.ContainsKey("HostAddress") -and $env:HOSHINO_HOST) {
+    $HostAddress = $env:HOSHINO_HOST
+}
+if (-not $PSBoundParameters.ContainsKey("Port") -and $env:HOSHINO_PORT) {
+    $Port = [int]$env:HOSHINO_PORT
+}
 if (-not $RvcRepoDir) {
-    $RvcRepoDir = Join-Path (Split-Path $ProjectDir -Parent) "external\Retrieval-based-Voice-Conversion-WebUI"
+    $RvcRepoDir = if ($env:HOSHINO_RVC_REPO_DIR) {
+        $env:HOSHINO_RVC_REPO_DIR
+    } else {
+        Join-Path (Split-Path $ProjectDir -Parent) "external\Retrieval-based-Voice-Conversion-WebUI"
+    }
+}
+if (-not $RvcModel) {
+    $RvcModel = if ($env:HOSHINO_RVC_MODEL) {
+        $env:HOSHINO_RVC_MODEL
+    } else {
+        "hoshino_jp_daily_rvc_40k_v1.pth"
+    }
 }
 if (-not $RvcIndex) {
-    $RvcIndex = Join-Path $RvcRepoDir "assets\indices\hoshino_jp_daily_rvc_40k_v1_IVF2283_Flat_nprobe_1_hoshino_jp_daily_rvc_40k_v1_v2.index"
+    $RvcIndex = if ($env:HOSHINO_RVC_INDEX) {
+        $env:HOSHINO_RVC_INDEX
+    } else {
+        Join-Path $RvcRepoDir "assets\indices\hoshino_jp_daily_rvc_40k_v1_IVF2283_Flat_nprobe_1_hoshino_jp_daily_rvc_40k_v1_v2.index"
+    }
 }
 $Python = Join-Path $ProjectDir ".venv-rvc\Scripts\python.exe"
 $VenvScripts = Join-Path $ProjectDir ".venv-rvc\Scripts"

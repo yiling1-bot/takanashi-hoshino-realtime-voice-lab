@@ -29,19 +29,43 @@ Realtime Hoshino-style voice chat: record speech in the browser, transcribe it l
 - 可访问 DeepSeek API
 - 本地 RVC WebUI 权重和索引文件
 
+### 1. 克隆项目
+
+```powershell
+git clone https://github.com/yiling1-bot/takanashi-hoshino-realtime-voice-lab.git
+cd takanashi-hoshino-realtime-voice-lab
+```
+
+### 2. 生成本地配置
+
+```powershell
+.\scripts\bootstrap.ps1
+```
+
+然后编辑：
+
+- `.env`：填写 RVC WebUI 路径、RVC 模型名、RVC index 路径
+- `configs\deepseek_api_key.txt`：填写 DeepSeek API key
+
+这些文件不会提交到 Git。
+
+### 3. 安装依赖
+
 安装依赖：
 
 ```powershell
-cd E:\Codexworkspace\takanashi-hoshino-voice-api
 .\scripts\setup_rvc_env.ps1
 ```
 
-准备 API key：
+### 4. 检查环境
 
 ```powershell
-Copy-Item configs\deepseek_api_key.txt.example configs\deepseek_api_key.txt
-notepad configs\deepseek_api_key.txt
+.\scripts\doctor.ps1
 ```
+
+如果缺 Python 环境、RVC 仓库、模型、index 或 API key，`doctor.ps1` 会直接指出来。
+
+### 5. 启动服务
 
 启动服务：
 
@@ -59,6 +83,7 @@ http://127.0.0.1:7860/realtime
 
 主要配置文件：
 
+- `.env`：本机路径和运行参数，不提交到 Git
 - `configs/chat_tts_config.json`：DeepSeek endpoint、模型名、key 文件路径、默认回复参数
 - `configs/hoshino_lofi_prompt.txt`：角色和场景提示词
 - `configs/deepseek_api_key.txt`：本地 API key，不提交到 Git
@@ -181,3 +206,10 @@ outputs/      生成音频和日志，默认不提交
 ## 接入其他项目
 
 - [Open WebUI 中文接入教程](docs/11_open_webui_cn.md)
+- [可复现部署说明](docs/12_reproducible_setup_cn.md)
+
+## 复现友好脚本
+
+- `scripts/bootstrap.ps1`：生成 `.env` 和本地 key 文件，占位初始化输出目录。
+- `scripts/doctor.ps1`：检查 Python、ffmpeg、RVC 仓库、模型、index、DeepSeek key 和关键 Python 包。
+- `scripts/start_api.ps1`：启动服务，并自动读取 `.env`。
