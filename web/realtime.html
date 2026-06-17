@@ -415,9 +415,9 @@
       form.append("audio", blob, "voice.webm");
       form.append("input_language", inputLanguage.value);
       form.append("reply_language", "ja");
-      form.append("scene", "quiet lofi night study room, lazy soft Hoshino-like senpai tone, very short reply");
-      form.append("max_chars", "55");
-      form.append("temperature", "0.68");
+      form.append("scene", "quiet lofi night study room, lazy soft Hoshino-like senpai tone, short complete reply");
+      form.append("max_chars", "60");
+      form.append("temperature", "0.45");
 
       const started = performance.now();
       try {

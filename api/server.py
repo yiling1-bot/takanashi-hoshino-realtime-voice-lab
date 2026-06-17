@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import re
+import struct
 import subprocess
+import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -52,14 +56,19 @@ INDEX_PATH = Path(
 )
 OUTPUT_DIR = PROJECT_DIR / "outputs" / "api"
 VOICE_INPUT_DIR = PROJECT_DIR / "outputs" / "voice_input"
+WARMUP_DIR = PROJECT_DIR / "outputs" / "warmup"
 REALTIME_WEB_PATH = PROJECT_DIR / "web" / "realtime.html"
 CHAT_CONFIG_PATH = Path(
     os.environ.get("HOSHINO_CHAT_CONFIG", str(PROJECT_DIR / "configs" / "chat_tts_config.json"))
 )
-API_BUILD = "chat_tts_realtime_voice_fast_20260617_014"
+API_BUILD = "chat_tts_persistent_rvc_warm_20260617_021"
 WHISPER_MODEL_NAME = os.environ.get("HOSHINO_WHISPER_MODEL", "tiny")
 WHISPER_DEVICE = os.environ.get("HOSHINO_WHISPER_DEVICE", "cpu")
 WHISPER_COMPUTE_TYPE = os.environ.get("HOSHINO_WHISPER_COMPUTE_TYPE", "int8")
+RVC_DEVICE = os.environ.get("HOSHINO_RVC_DEVICE", "cuda")
+RVC_IS_HALF = os.environ.get("HOSHINO_RVC_IS_HALF", "true").lower() in {"1", "true", "yes", "on"}
+RVC_USE_PERSISTENT = os.environ.get("HOSHINO_RVC_PERSISTENT", "true").lower() not in {"0", "false", "no", "off"}
+RVC_FALLBACK_TO_CLI = os.environ.get("HOSHINO_RVC_FALLBACK_TO_CLI", "true").lower() not in {"0", "false", "no", "off"}
 
 
 HOSHINO_SYSTEM_PROMPT = """你是一个“慵懒但可靠的前辈型萝莉”的角色小鸟游星野，不要说自己是 AI。
@@ -140,6 +149,19 @@ class SynthesisResult:
 app = FastAPI(title="Hoshino Voice API", version="0.1.0")
 _WHISPER_MODEL = None
 _WHISPER_MODEL_DEVICE = ""
+_WHISPER_WARMED = False
+_RVC_VC = None
+_RVC_LOCK = threading.RLock()
+_RVC_LOAD_ERROR = ""
+_RVC_BACKEND = "unloaded"
+_RVC_WARMED = False
+
+
+@app.on_event("startup")
+def startup_warm_persistent_rvc() -> None:
+    if RVC_USE_PERSISTENT:
+        threading.Thread(target=warmup_persistent_rvc, name="rvc-warmup", daemon=True).start()
+    threading.Thread(target=warmup_whisper, name="whisper-warmup", daemon=True).start()
 
 
 def project_path(value: str | Path) -> Path:
@@ -212,7 +234,12 @@ def clean_reply(text: str, max_chars: int) -> str:
     text = re.sub(r"\s+", " ", text)
     text = re.sub(r"[（(][^（）()]{0,40}[）)]", "", text).strip()
     if len(text) > max_chars:
-        text = text[:max_chars].rstrip("，、。,.!！？；; ") + "。"
+        prefix = text[:max_chars].rstrip("，、,.；; ")
+        cutoff = max(prefix.rfind(mark) for mark in "。.!！？…")
+        if cutoff >= max(12, int(max_chars * 0.45)):
+            text = prefix[: cutoff + 1]
+        else:
+            text = prefix.rstrip("，、,.；; ") + "……"
     return text
 
 
@@ -227,6 +254,22 @@ def looks_like_japanese(text: str) -> bool:
     if re.search(r"[�﹜﹝＃#´ˋ｀匚珂汜仇卅丐丹枠伏軟]", text):
         return False
     return True
+
+
+def trim_fast_realtime_reply(text: str, max_chars: int = 42) -> str:
+    text = text.strip()
+    if len(text) <= max_chars:
+        return text
+    pieces = re.split(r"(?<=[。！？!?])", text)
+    for piece in pieces:
+        piece = piece.strip()
+        if 8 <= len(piece) <= max_chars:
+            return piece
+    prefix = text[:max_chars].rstrip("，、,.；; ")
+    cutoff = max(prefix.rfind(mark) for mark in "。.!！？…")
+    if cutoff >= 8:
+        return prefix[: cutoff + 1]
+    return prefix.rstrip("，、,.；; ") + "……"
 
 
 def build_chat_user_prompt(req: ChatRequest) -> str:
@@ -270,14 +313,18 @@ def generate_chat_reply(req: ChatRequest) -> ChatResponse:
         user_prompt = build_chat_user_prompt(req)
         if attempt:
             user_prompt += "\n前の出力は文字化けまたは不自然でした。今度は必ず普通の日本語だけで、短く自然に返してください。"
+        fast_realtime = "Fast realtime mode" in req.scene
+        max_tokens = max(64, min(512, req.max_chars * 3))
+        if fast_realtime:
+            max_tokens = max(80, min(160, req.max_chars * 3))
         body = {
             "model": model,
             "messages": [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": max(0.45, req.temperature - attempt * 0.2),
-            "max_tokens": max(64, min(512, req.max_chars * 3)),
+            "temperature": max(0.35 if fast_realtime else 0.45, req.temperature - attempt * 0.2),
+            "max_tokens": max_tokens,
             "stream": False,
         }
         request = urllib.request.Request(
@@ -483,6 +530,134 @@ def run_checked(cmd: list[str], cwd: Path | None = None) -> None:
         )
 
 
+def configure_rvc_environment() -> None:
+    os.environ.setdefault("weight_root", str(RVC_REPO_DIR / "assets" / "weights"))
+    os.environ.setdefault("index_root", str(RVC_REPO_DIR / "logs"))
+    os.environ.setdefault("outside_index_root", str(RVC_REPO_DIR / "assets" / "indices"))
+    os.environ.setdefault("rmvpe_root", str(RVC_REPO_DIR / "assets" / "rmvpe"))
+    venv_scripts = str(RVC_VENV_DIR / "Scripts")
+    current_path = os.environ.get("PATH") or os.environ.get("Path") or ""
+    if venv_scripts.lower() not in current_path.lower():
+        os.environ["PATH"] = venv_scripts + os.pathsep + current_path
+        os.environ["Path"] = os.environ["PATH"]
+    rvc_path = str(RVC_REPO_DIR)
+    if rvc_path not in sys.path:
+        sys.path.insert(0, rvc_path)
+
+
+def get_persistent_rvc():
+    global _RVC_VC, _RVC_LOAD_ERROR, _RVC_BACKEND
+    if _RVC_VC is not None:
+        return _RVC_VC
+
+    with _RVC_LOCK:
+        if _RVC_VC is not None:
+            return _RVC_VC
+
+        previous_cwd = os.getcwd()
+        previous_argv = sys.argv[:]
+        try:
+            configure_rvc_environment()
+            os.chdir(RVC_REPO_DIR)
+            sys.argv = [sys.argv[0]]
+            from dotenv import load_dotenv
+            from configs.config import Config
+            from infer.modules.vc.modules import VC
+
+            load_dotenv(RVC_REPO_DIR / ".env")
+            config = Config()
+            config.device = RVC_DEVICE
+            config.is_half = RVC_IS_HALF
+            vc = VC(config)
+            vc.get_vc(MODEL_NAME)
+            vc.hubert_model = None
+            _RVC_VC = vc
+            _RVC_BACKEND = f"persistent:{RVC_DEVICE}/half={RVC_IS_HALF}"
+            _RVC_LOAD_ERROR = ""
+            return _RVC_VC
+        except Exception as exc:
+            _RVC_BACKEND = "persistent-load-failed"
+            _RVC_LOAD_ERROR = repr(exc)
+            raise
+        finally:
+            sys.argv = previous_argv
+            os.chdir(previous_cwd)
+
+
+def convert_one_persistent(base_wav: Path, out_wav: Path, req: TtsRequest, f0up_key: int) -> str:
+    with _RVC_LOCK:
+        previous_cwd = os.getcwd()
+        try:
+            configure_rvc_environment()
+            os.chdir(RVC_REPO_DIR)
+            vc = get_persistent_rvc()
+            info, wav_opt = vc.vc_single(
+                0,
+                str(base_wav),
+                f0up_key,
+                None,
+                "rmvpe",
+                str(INDEX_PATH),
+                None,
+                req.index_rate,
+                3,
+                0,
+                1,
+                0.33,
+            )
+            sr, audio = wav_opt
+            if sr is None or audio is None:
+                raise RuntimeError(info)
+            from scipy.io import wavfile
+
+            wavfile.write(str(out_wav), sr, audio)
+            return _RVC_BACKEND
+        finally:
+            os.chdir(previous_cwd)
+
+
+def write_warmup_wav(path: Path) -> None:
+    if path.exists():
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sample_rate = 16000
+    duration_sec = 1.2
+    frequency = 220.0
+    total = int(sample_rate * duration_sec)
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        frames = bytearray()
+        for i in range(total):
+            envelope = min(1.0, i / 1600, (total - i) / 1600)
+            value = int(9000 * envelope * math.sin(2 * math.pi * frequency * i / sample_rate))
+            frames.extend(struct.pack("<h", value))
+        wav.writeframes(bytes(frames))
+
+
+def warmup_persistent_rvc() -> None:
+    global _RVC_WARMED, _RVC_LOAD_ERROR
+    try:
+        warm_input = WARMUP_DIR / "rvc_warmup_input.wav"
+        warm_output = WARMUP_DIR / "rvc_warmup_output.wav"
+        write_warmup_wav(warm_input)
+        req = TtsRequest(text="warmup", index_rate=0.48)
+        convert_one_persistent(warm_input, warm_output, req, 2)
+        _RVC_WARMED = True
+    except Exception as exc:
+        _RVC_LOAD_ERROR = repr(exc)
+
+
+def warmup_whisper() -> None:
+    global _WHISPER_WARMED
+    try:
+        get_whisper_model()
+        _WHISPER_WARMED = True
+    except Exception:
+        _WHISPER_WARMED = False
+
+
 def get_whisper_model():
     global _WHISPER_MODEL, _WHISPER_MODEL_DEVICE
     if _WHISPER_MODEL is not None:
@@ -572,7 +747,7 @@ def split_text(text: str) -> list[str]:
     return chunks or [normalized]
 
 
-def convert_one(base_wav: Path, out_wav: Path, req: TtsRequest, f0up_key: int) -> None:
+def convert_one_cli(base_wav: Path, out_wav: Path, req: TtsRequest, f0up_key: int) -> str:
     run_checked(
         [
             str(PYTHON),
@@ -606,6 +781,20 @@ def convert_one(base_wav: Path, out_wav: Path, req: TtsRequest, f0up_key: int) -
         ],
         cwd=RVC_REPO_DIR,
     )
+    return "cli"
+
+
+def convert_one(base_wav: Path, out_wav: Path, req: TtsRequest, f0up_key: int) -> str:
+    global _RVC_LOAD_ERROR, _RVC_BACKEND
+    if RVC_USE_PERSISTENT:
+        try:
+            return convert_one_persistent(base_wav, out_wav, req, f0up_key)
+        except Exception as exc:
+            _RVC_LOAD_ERROR = repr(exc)
+            _RVC_BACKEND = "persistent-failed"
+            if not RVC_FALLBACK_TO_CLI:
+                raise HTTPException(status_code=500, detail={"persistent_rvc_error": repr(exc)}) from exc
+    return convert_one_cli(base_wav, out_wav, req, f0up_key)
 
 
 def concat_wavs(inputs: list[Path], output: Path, pause_ms: int) -> None:
@@ -645,7 +834,12 @@ def health() -> dict[str, object]:
         "api_build": API_BUILD,
         "whisper_model": WHISPER_MODEL_NAME,
         "whisper_loaded": _WHISPER_MODEL is not None,
+        "whisper_warmed": _WHISPER_WARMED,
         "whisper_device": _WHISPER_MODEL_DEVICE,
+        "rvc_backend": _RVC_BACKEND,
+        "rvc_persistent_enabled": RVC_USE_PERSISTENT,
+        "rvc_warmed": _RVC_WARMED,
+        "rvc_load_error": _RVC_LOAD_ERROR[-500:],
     }
 
 
@@ -695,15 +889,14 @@ def synthesize(req: TtsRequest) -> SynthesisResult:
         rate_delta = chunk_rate_delta(chunk, i, len(chunks), voice)
         min_rate, max_rate = rate_bounds(voice)
         chunk_rate = format_percent(clamp(base_rate_percent + rate_delta, min_rate, max_rate))
-        chunk_settings.append(
-            {
-                "index": i,
-                "text": chunk,
-                "rate": chunk_rate,
-                "pitch": chunk_pitch,
-                "f0up_key": chunk_f0up_key,
-            }
-        )
+        chunk_setting = {
+            "index": i,
+            "text": chunk,
+            "rate": chunk_rate,
+            "pitch": chunk_pitch,
+            "f0up_key": chunk_f0up_key,
+        }
+        chunk_settings.append(chunk_setting)
         edge_cmd = [
                 str(PYTHON),
                 "-m",
@@ -733,7 +926,7 @@ def synthesize(req: TtsRequest) -> SynthesisResult:
                 str(base_wav),
             ]
         )
-        convert_one(base_wav, chunk_wav, req, chunk_f0up_key)
+        chunk_setting["rvc_backend"] = convert_one(base_wav, chunk_wav, req, chunk_f0up_key)
         converted.append(chunk_wav)
 
     concat_wavs(converted, out_wav, pause_ms)
@@ -806,16 +999,17 @@ async def voice_chat(
         ChatRequest(
             text=transcript,
             reply_language=reply_language,
-            scene=f"{scene}. Fast realtime mode: answer in one short natural Japanese line.",
-            max_chars=max(20, min(70, max_chars)),
+            scene=f"{scene}. Fast realtime mode: answer in one short complete natural Japanese line under 35 Japanese characters. Always finish the sentence.",
+            max_chars=max(20, min(65, max_chars)),
             temperature=max(0.0, min(1.5, temperature)),
         ),
     )
     replied_at = time.perf_counter()
+    reply_text = trim_fast_realtime_reply(chat_result.reply)
     tts_result = await asyncio.to_thread(
         synthesize,
         TtsRequest(
-            text=chat_result.reply,
+            text=reply_text,
             voice="ja-JP-NanamiNeural" if wants_japanese(reply_language) else None,
             format="wav",
             index_rate=0.48,
@@ -831,7 +1025,7 @@ async def voice_chat(
     return VoiceChatResponse(
         transcript=transcript,
         transcript_language=transcript_language,
-        reply=chat_result.reply,
+        reply=reply_text,
         audio_url=f"/api/v1/audio/{tts_result.request_id}",
         request_id=tts_result.request_id,
         chat_model=chat_result.model,
