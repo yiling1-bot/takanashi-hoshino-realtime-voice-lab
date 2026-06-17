@@ -1,9 +1,16 @@
 param(
-    [string]$RepoDir = "E:\Codexworkspace\external\Retrieval-based-Voice-Conversion-WebUI",
-    [string]$VenvDir = "E:\Codexworkspace\takanashi-hoshino-voice-api\.venv-rvc"
+    [string]$RepoDir = "",
+    [string]$VenvDir = ""
 )
 
 $ErrorActionPreference = "Stop"
+$ProjectDir = Split-Path $PSScriptRoot -Parent
+if (-not $RepoDir) {
+    $RepoDir = Join-Path (Split-Path $ProjectDir -Parent) "external\Retrieval-based-Voice-Conversion-WebUI"
+}
+if (-not $VenvDir) {
+    $VenvDir = Join-Path $ProjectDir ".venv-rvc"
+}
 
 Write-Host "Preparing Python 3.10 with uv..."
 uv python install 3.10
@@ -61,6 +68,11 @@ if ($LASTEXITCODE -ne 0) { throw "CUDA verification failed." }
 Write-Host "Verifying RVC imports..."
 & $Python -c "import torch, fairseq, gradio, librosa, pyworld, faiss, soundfile; print('rvc_imports=ok')"
 if ($LASTEXITCODE -ne 0) { throw "RVC import verification failed." }
+
+Write-Host "Installing API runtime dependencies..."
+$ApiRequirements = Join-Path $ProjectDir "requirements-api.txt"
+uv pip install --python $Python -r $ApiRequirements
+if ($LASTEXITCODE -ne 0) { throw "Failed to install API dependencies." }
 
 Write-Host "Environment ready:"
 Write-Host "  Repo: $RepoDir"

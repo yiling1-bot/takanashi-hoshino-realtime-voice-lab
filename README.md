@@ -1,53 +1,150 @@
-# Takanashi Hoshino Voice API
+# 小鸟游星野 Realtime Voice Lab
 
-本项目用于搭建一个本地语音生成服务：接口收到文本，例如 `你好`，返回目标音色的语音文件或音频流。
+一个本地运行的实时语音对话实验项目：浏览器录音 -> Whisper 识别 -> DeepSeek 生成日文角色回复 -> Edge TTS 基础音频 -> 本地 RVC 转换输出。
 
-## 当前状态
+项目目标是做一个低延迟、偏慵懒、柔软、日常对话感的“小鸟游星野风格”语音接口。仓库不包含训练数据、官方素材、模型权重、API key 或生成音频。
 
-- 已创建项目目录和规划文档。
-- 等待训练包放入 `data/raw/training_pack/`。
-- 暂不拉取训练框架，也不启动训练，避免在训练包质量、标注情况、授权情况未知时做错技术路线。
+## 功能
 
-## 合规前提
+- 实时网页入口：`http://127.0.0.1:7860/realtime`
+- REST API：文本转语音、角色回复、语音输入转日文回复
+- 常驻 RVC 推理：服务启动后预热模型，避免每次请求重新启动转换脚本
+- Whisper 语音识别：默认 `tiny` + `cpu/int8`，优先保证启动和交互稳定
+- 本地配置读取：DeepSeek key、角色提示词、RVC 模型路径都从本地文件或环境变量读取
 
-训练包需要是你有权使用的数据。该项目默认作为本地研究和授权数据处理工程，不应对外宣称生成结果来自官方角色、声优本人或任何未经授权的身份。
+## 免责声明
 
-## 推荐路线
+这是非官方的本地研究/二创工程模板。请只使用你有权使用的音频、模型和训练数据。不要把输出声明为官方角色、现实声优本人或任何未经授权身份的真实声音。
 
-优先路线：`GPT-SoVITS` 直接做少样本/微调 TTS。
+## 快速开始
 
-- 适合：训练包有较干净的人声，并且能整理出文本标注。
-- 优点：接口可直接从文本生成目标音色语音，流程短。
-- 参考：官方仓库说明其支持 zero-shot、few-shot 和中日英等多语言推理。
+要求：
 
-备选路线：`基础 TTS -> RVC 音色转换`。
+- Windows 10/11
+- Python 3.10，推荐使用 `uv`
+- NVIDIA GPU，已测试 RTX 4060 级别显卡
+- 可访问 DeepSeek API
+- 本地 RVC WebUI 权重和索引文件
 
-- 适合：训练包只有音频，缺少准确文本标注。
-- 优点：对数据标注要求低，能较快得到可用 demo。
-- 缺点：语气、停顿和情绪更多受基础 TTS 控制。
+安装依赖：
 
-## 目录结构
-
-```text
-takanashi-hoshino-voice-api/
-  api/                  # 后续 FastAPI 服务代码
-  configs/              # 训练和推理配置
-  data/
-    raw/                # 原始训练包，保持不改动
-    processed/          # 清洗、切片、重采样后的数据
-  docs/                 # 项目规划、数据规范、接口契约
-  models/
-    checkpoints/        # 训练中间权重
-    exported/           # 可部署模型
-  outputs/
-    samples/            # 测试生成音频
-  scripts/              # 数据处理、训练、导出脚本
+```powershell
+cd E:\Codexworkspace\takanashi-hoshino-voice-api
+.\scripts\setup_rvc_env.ps1
 ```
 
-## 下一步
+准备 API key：
 
-1. 将训练包放到 `data/raw/training_pack/`。
-2. 告诉我训练包大致内容：总时长、语言、文件格式、是否有人声文本标注、是否含背景音乐或音效。
-3. 我会先做数据体检，再决定使用直接 TTS 微调还是 TTS + RVC 转换。
+```powershell
+Copy-Item configs\deepseek_api_key.txt.example configs\deepseek_api_key.txt
+notepad configs\deepseek_api_key.txt
+```
 
-详细计划见 [docs/01_project_plan.md](docs/01_project_plan.md)。
+启动服务：
+
+```powershell
+.\scripts\start_api.ps1
+```
+
+打开实时页面：
+
+```text
+http://127.0.0.1:7860/realtime
+```
+
+## 配置
+
+主要配置文件：
+
+- `configs/chat_tts_config.json`：DeepSeek endpoint、模型名、key 文件路径、默认回复参数
+- `configs/hoshino_lofi_prompt.txt`：角色和场景提示词
+- `configs/deepseek_api_key.txt`：本地 API key，不提交到 Git
+
+关键环境变量：
+
+- `HOSHINO_PROJECT_DIR`：项目目录
+- `HOSHINO_CHAT_CONFIG`：聊天配置文件路径
+- `HOSHINO_RVC_REPO_DIR`：RVC WebUI 仓库路径
+- `HOSHINO_RVC_VENV_DIR`：Python 虚拟环境路径
+- `HOSHINO_RVC_MODEL`：RVC 模型文件名或路径
+- `HOSHINO_RVC_INDEX`：RVC index 文件路径
+- `HOSHINO_RVC_PERSISTENT`：是否启用常驻 RVC，默认启用
+- `HOSHINO_WHISPER_MODEL`：Whisper 模型名，默认 `tiny`
+
+## API
+
+健康检查：
+
+```http
+GET /api/v1/health
+```
+
+文本直接转语音：
+
+```http
+POST /api/v1/tts
+Content-Type: application/json
+```
+
+```json
+{
+  "text": "先生、まだ起きてたの？",
+  "format": "wav",
+  "index_rate": 0.42,
+  "auto_split": true,
+  "lazy_style": true
+}
+```
+
+文本生成角色回复：
+
+```http
+POST /api/v1/chat
+Content-Type: application/json
+```
+
+```json
+{
+  "text": "你好",
+  "reply_language": "ja",
+  "scene": "quiet lofi night study room",
+  "max_chars": 60,
+  "temperature": 0.45
+}
+```
+
+语音输入到日文回复音频：
+
+```http
+POST /api/v1/voice-chat
+Content-Type: multipart/form-data
+```
+
+字段：
+
+- `audio`：录音文件，浏览器默认 `audio/webm`
+- `input_language`：`auto`、`zh`、`ja`
+- `reply_language`：默认 `ja`
+- `scene`：场景提示
+- `max_chars`：回复最大字符数
+- `temperature`：回复随机度
+
+## 项目结构
+
+```text
+api/          FastAPI 服务和推理编排
+configs/      本地配置、提示词和依赖清单
+docs/         训练、接口、调参和实时语音说明
+scripts/      环境安装、训练、索引、启动脚本
+web/          实时语音网页
+data/         本地训练数据，默认不提交
+models/       本地模型权重，默认不提交
+outputs/      生成音频和日志，默认不提交
+snapshots/    调参快照，音频默认不提交
+```
+
+## 开发说明
+
+当前主路径是 `TTS -> RVC voice conversion`，所以自然度主要受基础 TTS、停顿切分、语速、音高和 RVC index rate 影响。低延迟交互优先使用常驻 RVC；如果显存不够，可以设置 `HOSHINO_RVC_PERSISTENT=false` 回退到命令行转换。
+
+更多细节见 [docs/10_realtime_voice.md](docs/10_realtime_voice.md)。

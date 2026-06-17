@@ -4,6 +4,10 @@ data/processed/
 models/checkpoints/
 models/exported/
 outputs/
+snapshots/**/*.wav
+snapshots/**/*.mp3
+snapshots/**/*.flac
+snapshots/**/*.ogg
 
 # Python
 .venv/
@@ -18,6 +22,8 @@ logs/
 
 # Local secrets
 configs/deepseek_api_key.txt
+configs/*local*.json
+.env
 
 # OS/editor
 .DS_Store

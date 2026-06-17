@@ -1,69 +1,9 @@
 # API 契约
 
-## 服务目标
-
-提供一个本地 HTTP 接口，从文本生成语音。
-
-默认地址：
+默认服务地址：
 
 ```text
 http://127.0.0.1:7860
-```
-
-## 生成语音
-
-```http
-POST /api/v1/tts
-Content-Type: application/json
-Accept: audio/wav
-```
-
-请求体：
-
-```json
-{
-  "text": "你好",
-  "language": "zh",
-  "format": "wav",
-  "speed": 1.0,
-  "seed": 1234
-}
-```
-
-字段说明：
-
-- `text`：必填，要合成的文本。
-- `language`：可选，`zh`、`jp`、`en`、`mixed`。
-- `format`：可选，`wav` 或 `mp3`，默认 `wav`。
-- `speed`：可选，语速，默认 `1.0`。
-- `seed`：可选，用于复现结果。
-
-响应：
-
-```http
-200 OK
-Content-Type: audio/wav
-```
-
-响应体为音频二进制。
-
-## JSON 响应模式
-
-如果请求头为：
-
-```http
-Accept: application/json
-```
-
-则返回：
-
-```json
-{
-  "audio_path": "outputs/samples/20260614_120000.wav",
-  "duration_ms": 1830,
-  "model": "gpt-sovits",
-  "language": "zh"
-}
 ```
 
 ## 健康检查
@@ -72,61 +12,144 @@ Accept: application/json
 GET /api/v1/health
 ```
 
-返回：
+返回当前构建号、Whisper 预热状态、RVC 预热状态和后端信息。
 
 ```json
 {
   "status": "ok",
-  "model_loaded": true,
-  "device": "cuda",
-  "model_name": "hoshino"
+  "api_build": "chat_tts_persistent_rvc_warm_20260617_024",
+  "whisper_warmed": true,
+  "rvc_warmed": true,
+  "rvc_backend": "persistent:cuda/half=True"
 }
 ```
 
-## 模型信息
+## 文本转语音
 
 ```http
-GET /api/v1/model
+POST /api/v1/tts
+Content-Type: application/json
 ```
 
-返回：
+请求体：
 
 ```json
 {
-  "name": "hoshino",
-  "backend": "gpt-sovits",
-  "languages": ["zh", "jp"],
-  "sample_rate": 32000
+  "text": "せんせー……まだ起きてたの？",
+  "format": "wav",
+  "index_rate": 0.42,
+  "auto_split": true,
+  "pause_ms": 180,
+  "rate": "-22%",
+  "volume": "+0%",
+  "lazy_style": true
 }
 ```
 
-## 错误格式
+响应：
 
 ```json
 {
-  "error": {
-    "code": "TEXT_EMPTY",
-    "message": "text cannot be empty"
+  "request_id": "ad6830f3d9da462ba975e24b48d563fa",
+  "text": "せんせー……まだ起きてたの？",
+  "voice": "ja-JP-NanamiNeural",
+  "audio_url": "/api/v1/audio/ad6830f3d9da462ba975e24b48d563fa"
+}
+```
+
+## 角色文本回复
+
+```http
+POST /api/v1/chat
+Content-Type: application/json
+```
+
+请求体：
+
+```json
+{
+  "text": "你好",
+  "reply_language": "ja",
+  "scene": "quiet lofi night study room",
+  "max_chars": 60,
+  "temperature": 0.45
+}
+```
+
+响应：
+
+```json
+{
+  "reply": "せんせー……おはよ。今日もゆっくり始めよっか。",
+  "model": "deepseek-v4-flash",
+  "prompt_file": "configs/hoshino_lofi_prompt.txt"
+}
+```
+
+## 角色回复并生成语音
+
+```http
+POST /api/v1/chat-tts
+Content-Type: application/json
+```
+
+请求体：
+
+```json
+{
+  "text": "你好",
+  "reply_language": "ja",
+  "scene": "quiet lofi night study room",
+  "max_chars": 60,
+  "temperature": 0.45,
+  "index_rate": 0.42,
+  "auto_split": true,
+  "lazy_style": true
+}
+```
+
+响应为 WAV 二进制，生成的角色文本会放在 `X-Hoshino-Reply` 响应头里，使用 URL 编码的 UTF-8。
+
+## 实时语音对话
+
+```http
+POST /api/v1/voice-chat
+Content-Type: multipart/form-data
+```
+
+字段：
+
+- `audio`：语音文件，浏览器默认上传 `audio/webm`
+- `input_language`：`auto`、`zh`、`ja`
+- `reply_language`：默认 `ja`
+- `scene`：场景提示
+- `max_chars`：回复最大字符数
+- `temperature`：回复随机度
+
+响应：
+
+```json
+{
+  "transcript": "你好",
+  "transcript_language": "zh",
+  "reply": "せんせー……おはよ。今日もゆっくり始めよっか。",
+  "audio_url": "/api/v1/audio/ad6830f3d9da462ba975e24b48d563fa",
+  "request_id": "ad6830f3d9da462ba975e24b48d563fa",
+  "chat_model": "deepseek-v4-flash",
+  "whisper_model": "tiny",
+  "timings": {
+    "transcribe_sec": 0.7,
+    "chat_sec": 1.2,
+    "tts_sec": 3.5,
+    "total_sec": 5.4
   }
 }
 ```
 
-常见错误码：
+## 音频文件
 
-- `TEXT_EMPTY`
-- `MODEL_NOT_LOADED`
-- `UNSUPPORTED_LANGUAGE`
-- `SYNTHESIS_FAILED`
-- `AUDIO_EXPORT_FAILED`
-
-## 最小调用示例
-
-```powershell
-Invoke-WebRequest `
-  -Uri "http://127.0.0.1:7860/api/v1/tts" `
-  -Method POST `
-  -ContentType "application/json" `
-  -Headers @{ Accept = "audio/wav" } `
-  -Body '{"text":"你好","language":"zh","format":"wav"}' `
-  -OutFile "outputs/samples/hello.wav"
+```http
+GET /api/v1/audio/{request_id}
 ```
+
+返回对应请求生成的 WAV 文件。

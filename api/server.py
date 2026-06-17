@@ -146,7 +146,7 @@ class SynthesisResult:
     voice: str
 
 
-app = FastAPI(title="Hoshino Voice API", version="0.1.0")
+app = FastAPI(title="小鸟游星野 Realtime Voice Lab API", version="0.2.0")
 _WHISPER_MODEL = None
 _WHISPER_MODEL_DEVICE = ""
 _WHISPER_WARMED = False
