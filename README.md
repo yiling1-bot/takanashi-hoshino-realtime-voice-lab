@@ -1,107 +1,138 @@
-# 小鸟游星野 Realtime Voice Lab
+# Takanashi Hoshino Realtime Voice Lab
 
-一个本地运行的实时语音对话项目：浏览器录音识别，AI 生成日文回复，再用 TTS + RVC 输出“小鸟游星野风格”的语音。
+中文名：小鸟游星野 Realtime Voice Lab
 
-Realtime Hoshino-style voice chat: record speech in the browser, transcribe it locally, generate a Japanese reply, then output speech through TTS + RVC voice conversion.
+A local realtime voice chat project: record speech in the browser, transcribe it, generate a Japanese reply, then output a Hoshino-style voice through TTS + RVC voice conversion.
 
-项目目标是做一个低延迟、偏慵懒、柔软、日常对话感的“小鸟游星野风格”语音接口。仓库不包含训练数据、官方素材、模型权重、API key 或生成音频。
+中文说明：这是一个本地实时语音对话项目。浏览器录音后，服务会识别语音、生成日文回复，再通过 TTS + RVC 输出偏“小鸟游星野风格”的语音。
 
-## 功能
+This repository does not include training data, official assets, model weights, API keys, or generated audio.
+
+中文说明：仓库不包含训练数据、官方素材、模型权重、API key 或生成音频。
+
+## Features
+
+- Realtime web UI: `http://127.0.0.1:7860/realtime`
+- REST APIs for text-to-speech, character replies, and voice-to-voice chat
+- OpenAI-compatible TTS endpoint: `POST /v1/audio/speech`
+- Persistent RVC inference to avoid reloading the converter on every request
+- Whisper ASR with default `tiny` + `cpu/int8`
+- Local file based configuration for DeepSeek, persona prompt, RVC model, and RVC index
+
+中文说明：
 
 - 实时网页入口：`http://127.0.0.1:7860/realtime`
-- REST API：文本转语音、角色回复、语音输入转日文回复
-- OpenAI-compatible TTS：`POST /v1/audio/speech`
-- 常驻 RVC 推理：服务启动后预热模型，避免每次请求重新启动转换脚本
-- Whisper 语音识别：默认 `tiny` + `cpu/int8`，优先保证启动和交互稳定
-- 本地配置读取：DeepSeek key、角色提示词、RVC 模型路径都从本地文件或环境变量读取
+- 支持文本转语音、角色回复、语音输入到日文语音回复
+- 兼容 OpenAI TTS 风格接口：`POST /v1/audio/speech`
+- 常驻 RVC 推理，减少每次请求重新加载模型的延迟
+- Whisper 语音识别默认使用 `tiny` + `cpu/int8`
+- DeepSeek、角色提示词、RVC 模型和 index 都从本地文件配置
 
-## 免责声明
+## Disclaimer
 
-这是非官方的本地研究/二创工程模板。请只使用你有权使用的音频、模型和训练数据。不要把输出声明为官方角色、现实声优本人或任何未经授权身份的真实声音。
+This is an unofficial local research and fan-project template. Use only audio, models, and datasets that you have the right to use. Do not present generated audio as an official release, a real voice actor's performance, or an authorized identity unless you have explicit rights to do so.
 
-## 快速开始
+中文说明：这是非官方的本地研究/二创工程模板。请只使用你有权使用的音频、模型和训练数据。不要把生成音频声明为官方内容、现实声优本人或任何未经授权身份的真实声音。
 
-要求：
+## Requirements
+
+- Windows 10/11
+- Python 3.10, recommended through `uv`
+- NVIDIA GPU, tested on RTX 4060 class hardware
+- DeepSeek API access
+- Local RVC WebUI model weight and index files
+
+中文说明：
 
 - Windows 10/11
 - Python 3.10，推荐使用 `uv`
-- NVIDIA GPU，已测试 RTX 4060 级别显卡
-- 可访问 DeepSeek API
-- 本地 RVC WebUI 权重和索引文件
+- NVIDIA 显卡，已在 RTX 4060 级别硬件上测试
+- DeepSeek API
+- 本地 RVC WebUI 模型权重和 index 文件
 
-### 1. 克隆项目
+## Quick Start
+
+### 1. Clone
 
 ```powershell
 git clone https://github.com/yiling1-bot/takanashi-hoshino-realtime-voice-lab.git
 cd takanashi-hoshino-realtime-voice-lab
 ```
 
-### 2. 生成本地配置
+中文说明：先克隆仓库并进入项目目录。
+
+### 2. Create local config files
 
 ```powershell
 .\scripts\bootstrap.ps1
 ```
 
-然后编辑：
+Then edit:
 
-- `.env`：填写 RVC WebUI 路径、RVC 模型名、RVC index 路径
-- `configs\deepseek_api_key.txt`：填写 DeepSeek API key
+- `.env`: set your local RVC WebUI path, RVC model name, and RVC index path
+- `configs\deepseek_api_key.txt`: put your DeepSeek API key here
 
-这些文件不会提交到 Git。
+These files are ignored by Git.
 
-### 3. 安装依赖
+中文说明：运行 `bootstrap.ps1` 会生成 `.env` 和本地 key 文件。然后编辑 `.env` 填 RVC 路径、模型名和 index 路径；编辑 `configs\deepseek_api_key.txt` 填 DeepSeek API key。这些文件不会提交到 Git。
 
-安装依赖：
+### 3. Install dependencies
 
 ```powershell
 .\scripts\setup_rvc_env.ps1
 ```
 
-### 4. 检查环境
+中文说明：这个脚本会准备 Python 3.10 环境、RVC WebUI、CUDA PyTorch、RVC 依赖和 API 依赖。
+
+### 4. Check the environment
 
 ```powershell
 .\scripts\doctor.ps1
 ```
 
-如果缺 Python 环境、RVC 仓库、模型、index 或 API key，`doctor.ps1` 会直接指出来。
+The doctor script checks Python, ffmpeg, RVC repo, model weight, index file, DeepSeek key, CUDA, and key Python imports.
 
-### 5. 启动服务
+中文说明：`doctor.ps1` 会检查 Python、ffmpeg、RVC 仓库、模型权重、index、DeepSeek key、CUDA 和关键 Python 包。如果缺东西，会直接指出来。
 
-启动服务：
+### 5. Start the API server
 
 ```powershell
 .\scripts\start_api.ps1
 ```
 
-打开实时页面：
+Open:
 
 ```text
 http://127.0.0.1:7860/realtime
 ```
 
-## 配置
+中文说明：启动后打开实时语音页面即可测试。
 
-主要配置文件：
+## Configuration
 
-- `.env`：本机路径和运行参数，不提交到 Git
-- `configs/chat_tts_config.json`：DeepSeek endpoint、模型名、key 文件路径、默认回复参数
-- `configs/hoshino_lofi_prompt.txt`：角色和场景提示词
-- `configs/deepseek_api_key.txt`：本地 API key，不提交到 Git
+Main local files:
 
-关键环境变量：
+- `.env`: machine-specific paths and runtime options, ignored by Git
+- `configs/chat_tts_config.json`: DeepSeek endpoint, model, key file path, and defaults
+- `configs/hoshino_lofi_prompt.txt`: persona and lofi scene prompt
+- `configs/deepseek_api_key.txt`: local DeepSeek API key, ignored by Git
 
-- `HOSHINO_PROJECT_DIR`：项目目录
-- `HOSHINO_CHAT_CONFIG`：聊天配置文件路径
-- `HOSHINO_RVC_REPO_DIR`：RVC WebUI 仓库路径
-- `HOSHINO_RVC_VENV_DIR`：Python 虚拟环境路径
-- `HOSHINO_RVC_MODEL`：RVC 模型文件名或路径
-- `HOSHINO_RVC_INDEX`：RVC index 文件路径
-- `HOSHINO_RVC_PERSISTENT`：是否启用常驻 RVC，默认启用
-- `HOSHINO_WHISPER_MODEL`：Whisper 模型名，默认 `tiny`
+Important environment variables:
+
+- `HOSHINO_PROJECT_DIR`: project directory
+- `HOSHINO_CHAT_CONFIG`: chat config path
+- `HOSHINO_RVC_REPO_DIR`: RVC WebUI repository path
+- `HOSHINO_RVC_VENV_DIR`: Python environment path
+- `HOSHINO_RVC_MODEL`: RVC model file name or path
+- `HOSHINO_RVC_INDEX`: RVC index path
+- `HOSHINO_RVC_PERSISTENT`: enable persistent RVC, enabled by default
+- `HOSHINO_WHISPER_MODEL`: Whisper model name, default `tiny`
+
+中文说明：通常只需要改 `.env` 和 `configs/deepseek_api_key.txt`。如果你不确定路径是否正确，先跑 `scripts\doctor.ps1`。
 
 ## API
 
-OpenAI-compatible 文本转语音：
+### OpenAI-compatible TTS
 
 ```http
 POST /v1/audio/speech
@@ -118,23 +149,27 @@ Content-Type: application/json
 }
 ```
 
-外部工具通常这样填：
+For external tools:
 
 ```text
 Base URL: http://127.0.0.1:7860/v1
 Endpoint: /audio/speech
-API Key: 任意占位字符串
+API Key: any placeholder string
 ```
 
-支持的 `response_format`：`mp3`、`opus`、`aac`、`flac`、`wav`、`pcm`。当前只支持非流式音频返回，`stream_format=sse` 会返回错误。
+Supported `response_format`: `mp3`, `opus`, `aac`, `flac`, `wav`, `pcm`. Streaming with `stream_format=sse` is not supported yet.
 
-健康检查：
+中文说明：外部工具可以把本项目当成 OpenAI-compatible TTS 服务。Base URL 填 `http://127.0.0.1:7860/v1`，API Key 可以填任意占位字符串。当前只支持非流式音频返回。
+
+### Native endpoints
+
+Health:
 
 ```http
 GET /api/v1/health
 ```
 
-文本直接转语音：
+Text to speech:
 
 ```http
 POST /api/v1/tts
@@ -151,7 +186,7 @@ Content-Type: application/json
 }
 ```
 
-文本生成角色回复：
+Text to character reply:
 
 ```http
 POST /api/v1/chat
@@ -168,48 +203,65 @@ Content-Type: application/json
 }
 ```
 
-语音输入到日文回复音频：
+Voice input to Japanese voice reply:
 
 ```http
 POST /api/v1/voice-chat
 Content-Type: multipart/form-data
 ```
 
-字段：
+Fields:
 
-- `audio`：录音文件，浏览器默认 `audio/webm`
-- `input_language`：`auto`、`zh`、`ja`
-- `reply_language`：默认 `ja`
-- `scene`：场景提示
-- `max_chars`：回复最大字符数
-- `temperature`：回复随机度
+- `audio`: uploaded recording, browser default is `audio/webm`
+- `input_language`: `auto`, `zh`, or `ja`
+- `reply_language`: default `ja`
+- `scene`: scene prompt
+- `max_chars`: max reply length
+- `temperature`: reply randomness
 
-## 项目结构
+中文说明：`/v1/audio/speech` 适合接 Open WebUI 等外部工具；`/api/v1/*` 是本项目自己的原生接口，适合调试完整流程。
+
+## Project Structure
 
 ```text
-api/          FastAPI 服务和推理编排
-configs/      本地配置、提示词和依赖清单
-docs/         训练、接口、调参和实时语音说明
-scripts/      环境安装、训练、索引、启动脚本
-web/          实时语音网页
-data/         本地训练数据，默认不提交
-models/       本地模型权重，默认不提交
-outputs/      生成音频和日志，默认不提交
+api/          FastAPI server and inference orchestration
+configs/      Local configs, prompts, and dependency lists
+docs/         Training, API, tuning, and integration docs
+scripts/      Setup, training, index, and launch scripts
+web/          Realtime browser UI
+data/         Local training data, ignored by default
+models/       Local model weights, ignored by default
+outputs/      Generated audio and logs, ignored by default
 ```
 
-## 开发说明
+中文说明：开源仓库只放代码、脚本、文档和示例配置。训练数据、模型权重、生成音频和日志默认不提交。
 
-当前主路径是 `TTS -> RVC voice conversion`，所以自然度主要受基础 TTS、停顿切分、语速、音高和 RVC index rate 影响。低延迟交互优先使用常驻 RVC；如果显存不够，可以设置 `HOSHINO_RVC_PERSISTENT=false` 回退到命令行转换。
+## Notes
 
-更多细节见 [docs/10_realtime_voice.md](docs/10_realtime_voice.md)。
+The current pipeline is:
 
-## 接入其他项目
+```text
+base TTS -> RVC voice conversion
+```
 
-- [Open WebUI 中文接入教程](docs/11_open_webui_cn.md)
-- [可复现部署说明](docs/12_reproducible_setup_cn.md)
+Naturalness mainly depends on base TTS quality, text splitting, pauses, speed, pitch, and RVC index rate. Low-latency interaction is best with persistent RVC enabled. If VRAM is limited, set `HOSHINO_RVC_PERSISTENT=false` to fall back to CLI conversion.
 
-## 复现友好脚本
+中文说明：当前主路径是 `基础 TTS -> RVC 变声`。自然度主要受基础 TTS、停顿切分、语速、音高和 RVC index rate 影响。显存足够时建议启用常驻 RVC。
 
-- `scripts/bootstrap.ps1`：生成 `.env` 和本地 key 文件，占位初始化输出目录。
-- `scripts/doctor.ps1`：检查 Python、ffmpeg、RVC 仓库、模型、index、DeepSeek key 和关键 Python 包。
-- `scripts/start_api.ps1`：启动服务，并自动读取 `.env`。
+More details:
+
+- [Realtime voice architecture](docs/10_realtime_voice.md)
+- [Open WebUI integration guide in Chinese](docs/11_open_webui_cn.md)
+- [Reproducible local setup in Chinese](docs/12_reproducible_setup_cn.md)
+
+## Helper Scripts
+
+- `scripts/bootstrap.ps1`: create `.env`, local key file, and output directories
+- `scripts/doctor.ps1`: check Python, ffmpeg, RVC repo, model, index, DeepSeek key, and key Python packages
+- `scripts/start_api.ps1`: start the service and load `.env`
+
+中文说明：
+
+- `scripts/bootstrap.ps1`：生成 `.env` 和本地 key 文件，占位初始化输出目录
+- `scripts/doctor.ps1`：检查 Python、ffmpeg、RVC 仓库、模型、index、DeepSeek key 和关键依赖
+- `scripts/start_api.ps1`：启动服务，并自动读取 `.env`
