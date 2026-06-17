@@ -221,6 +221,55 @@ Fields:
 
 中文说明：`/v1/audio/speech` 适合接 Open WebUI 等外部工具；`/api/v1/*` 是本项目自己的原生接口，适合调试完整流程。
 
+## Switching to Chinese Output
+
+If you want Chinese replies instead of Japanese replies, change `reply_language` from `ja` to `zh`.
+
+For `/api/v1/chat` or `/api/v1/chat-tts`:
+
+```json
+{
+  "text": "你好",
+  "reply_language": "zh",
+  "scene": "quiet lofi study room",
+  "max_chars": 80,
+  "temperature": 0.6
+}
+```
+
+For the realtime browser page, edit `web/realtime.html` and change:
+
+```js
+form.append("reply_language", "ja");
+```
+
+to:
+
+```js
+form.append("reply_language", "zh");
+```
+
+For project defaults, edit `configs/chat_tts_config.json`:
+
+```json
+"chat_defaults": {
+  "reply_language": "zh"
+}
+```
+
+For the OpenAI-compatible TTS endpoint, there is no separate reply language setting. It only speaks the `input` text. If `input` is Chinese, it will synthesize Chinese speech:
+
+```json
+{
+  "model": "hoshino-rvc-tts",
+  "voice": "alloy",
+  "input": "老师，今天也慢慢来吧。",
+  "response_format": "mp3"
+}
+```
+
+中文说明：如果想输出中文回复，把 `reply_language` 从 `ja` 改成 `zh` 即可。实时网页要改 `web/realtime.html` 里的 `form.append("reply_language", "ja")`。OpenAI-compatible TTS 接口没有回复语言设置，它只是把 `input` 读出来；输入中文就会输出中文语音。
+
 ## Project Structure
 
 ```text
