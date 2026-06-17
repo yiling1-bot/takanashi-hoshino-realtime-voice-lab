@@ -12,6 +12,15 @@ Browser MediaRecorder
   -> /api/v1/audio/{request_id}
 ```
 
+OpenAI-compatible TTS 入口走更短的链路：
+
+```text
+POST /v1/audio/speech
+  -> Edge TTS base audio
+  -> persistent RVC conversion
+  -> mp3/opus/aac/flac/wav/pcm response
+```
+
 ## 为什么使用常驻 RVC
 
 普通命令行 RVC 每次请求都要启动 Python、加载模型、加载 HubERT/RMVPE，再执行转换。这个启动成本会让一次对话轻易超过几十秒。

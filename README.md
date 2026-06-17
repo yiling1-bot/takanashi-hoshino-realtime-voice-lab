@@ -10,6 +10,7 @@ Realtime Hoshino-style voice chat: record speech in the browser, transcribe it l
 
 - 实时网页入口：`http://127.0.0.1:7860/realtime`
 - REST API：文本转语音、角色回复、语音输入转日文回复
+- OpenAI-compatible TTS：`POST /v1/audio/speech`
 - 常驻 RVC 推理：服务启动后预热模型，避免每次请求重新启动转换脚本
 - Whisper 语音识别：默认 `tiny` + `cpu/int8`，优先保证启动和交互稳定
 - 本地配置读取：DeepSeek key、角色提示词、RVC 模型路径都从本地文件或环境变量读取
@@ -74,6 +75,33 @@ http://127.0.0.1:7860/realtime
 - `HOSHINO_WHISPER_MODEL`：Whisper 模型名，默认 `tiny`
 
 ## API
+
+OpenAI-compatible 文本转语音：
+
+```http
+POST /v1/audio/speech
+Content-Type: application/json
+```
+
+```json
+{
+  "model": "gpt-4o-mini-tts",
+  "voice": "alloy",
+  "input": "せんせー……まだ起きてたの？",
+  "response_format": "mp3",
+  "speed": 1.0
+}
+```
+
+外部工具通常这样填：
+
+```text
+Base URL: http://127.0.0.1:7860/v1
+Endpoint: /audio/speech
+API Key: 任意占位字符串
+```
+
+支持的 `response_format`：`mp3`、`opus`、`aac`、`flac`、`wav`、`pcm`。当前只支持非流式音频返回，`stream_format=sse` 会返回错误。
 
 健康检查：
 

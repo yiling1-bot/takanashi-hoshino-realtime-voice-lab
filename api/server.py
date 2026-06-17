@@ -61,7 +61,7 @@ REALTIME_WEB_PATH = PROJECT_DIR / "web" / "realtime.html"
 CHAT_CONFIG_PATH = Path(
     os.environ.get("HOSHINO_CHAT_CONFIG", str(PROJECT_DIR / "configs" / "chat_tts_config.json"))
 )
-API_BUILD = "chat_tts_persistent_rvc_warm_20260617_024"
+API_BUILD = "chat_tts_persistent_rvc_warm_20260617_026_openai_speech"
 WHISPER_MODEL_NAME = os.environ.get("HOSHINO_WHISPER_MODEL", "tiny")
 WHISPER_DEVICE = os.environ.get("HOSHINO_WHISPER_DEVICE", "cpu")
 WHISPER_COMPUTE_TYPE = os.environ.get("HOSHINO_WHISPER_COMPUTE_TYPE", "int8")
@@ -69,6 +69,15 @@ RVC_DEVICE = os.environ.get("HOSHINO_RVC_DEVICE", "cuda")
 RVC_IS_HALF = os.environ.get("HOSHINO_RVC_IS_HALF", "true").lower() in {"1", "true", "yes", "on"}
 RVC_USE_PERSISTENT = os.environ.get("HOSHINO_RVC_PERSISTENT", "true").lower() not in {"0", "false", "no", "off"}
 RVC_FALLBACK_TO_CLI = os.environ.get("HOSHINO_RVC_FALLBACK_TO_CLI", "true").lower() not in {"0", "false", "no", "off"}
+OPENAI_AUDIO_FORMATS = {"mp3", "opus", "aac", "flac", "wav", "pcm"}
+OPENAI_AUDIO_MEDIA_TYPES = {
+    "mp3": "audio/mpeg",
+    "opus": "audio/opus",
+    "aac": "audio/aac",
+    "flac": "audio/flac",
+    "wav": "audio/wav",
+    "pcm": "audio/pcm",
+}
 
 
 HOSHINO_SYSTEM_PROMPT = """你是一个“慵懒但可靠的前辈型萝莉”的角色小鸟游星野，不要说自己是 AI。
@@ -119,6 +128,16 @@ class ChatTtsRequest(ChatRequest):
     volume: str = "+0%"
     pitch: str | None = None
     lazy_style: bool = True
+
+
+class OpenAISpeechRequest(BaseModel):
+    model: str = "gpt-4o-mini-tts"
+    input: str = Field(min_length=1, max_length=4096)
+    voice: str | dict[str, object] = "alloy"
+    instructions: str | None = Field(default=None, max_length=4096)
+    response_format: str = "mp3"
+    speed: float = Field(default=1.0, ge=0.25, le=4.0)
+    stream_format: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -364,6 +383,17 @@ def resolve_voice(text: str, requested_voice: str | None) -> str:
     return "zh-CN-XiaoyiNeural"
 
 
+def resolve_openai_voice(requested_voice: str | dict[str, object]) -> str | None:
+    if isinstance(requested_voice, dict):
+        voice = str(requested_voice.get("id") or requested_voice.get("name") or "")
+    else:
+        voice = str(requested_voice)
+    voice = voice.strip()
+    if re.fullmatch(r"[a-z]{2}-[A-Z]{2}-[A-Za-z0-9]+Neural", voice):
+        return voice
+    return None
+
+
 def is_japanese_voice(voice: str) -> bool:
     return voice.lower().startswith("ja-jp-")
 
@@ -412,6 +442,15 @@ def parse_percent(value: str) -> int:
 
 def format_percent(value: int) -> str:
     return f"{value:+d}%"
+
+
+def openai_speed_to_rate(speed: float, voice: str) -> str | None:
+    if abs(speed - 1.0) < 0.001:
+        return None
+    base_rate = parse_percent(resolve_rate(None, voice))
+    scaled = base_rate + int(round((speed - 1.0) * 55))
+    low, high = rate_bounds(voice)
+    return format_percent(clamp(scaled, low, high))
 
 
 def clamp(value: int, low: int, high: int) -> int:
@@ -948,6 +987,50 @@ def synthesize(req: TtsRequest) -> SynthesisResult:
     return SynthesisResult(path=out_wav, request_id=request_id, text=text, voice=voice)
 
 
+def transcode_audio_for_openai(wav_path: Path, response_format: str) -> Path:
+    fmt = response_format.lower().strip()
+    if fmt not in OPENAI_AUDIO_FORMATS:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": f"Unsupported response_format: {response_format}",
+                "supported": sorted(OPENAI_AUDIO_FORMATS),
+            },
+        )
+    if fmt == "wav":
+        return wav_path
+
+    output = wav_path.parent / f"speech.{fmt}"
+    if fmt == "pcm":
+        cmd = [
+            str(FFMPEG),
+            "-y",
+            "-i",
+            str(wav_path),
+            "-f",
+            "s16le",
+            "-acodec",
+            "pcm_s16le",
+            str(output),
+        ]
+    elif fmt == "opus":
+        cmd = [
+            str(FFMPEG),
+            "-y",
+            "-i",
+            str(wav_path),
+            "-c:a",
+            "libopus",
+            "-b:a",
+            "64k",
+            str(output),
+        ]
+    else:
+        cmd = [str(FFMPEG), "-y", "-i", str(wav_path), str(output)]
+    run_checked(cmd)
+    return output
+
+
 @app.get("/api/v1/audio/{request_id}")
 def generated_audio(request_id: str) -> FileResponse:
     if not re.fullmatch(r"[0-9a-f]{32}", request_id):
@@ -974,6 +1057,56 @@ async def tts(req: TtsRequest) -> FileResponse:
         media_type="audio/wav",
         filename=f"hoshino_{result.request_id}.wav",
         headers={"X-Hoshino-Voice": result.voice},
+    )
+
+
+@app.post("/v1/audio/speech")
+def openai_audio_speech(req: OpenAISpeechRequest) -> FileResponse:
+    stream_format = (req.stream_format or "audio").lower().strip()
+    if stream_format != "audio":
+        raise HTTPException(
+            status_code=400,
+            detail="Only non-streaming audio responses are supported. Use stream_format='audio'.",
+        )
+
+    response_format = req.response_format.lower().strip()
+    if response_format not in OPENAI_AUDIO_FORMATS:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": f"Unsupported response_format: {req.response_format}",
+                "supported": sorted(OPENAI_AUDIO_FORMATS),
+            },
+        )
+
+    requested_voice = resolve_openai_voice(req.voice)
+    voice = resolve_voice(req.input, requested_voice)
+    result = synthesize(
+        TtsRequest(
+            text=req.input,
+            voice=voice,
+            format="wav",
+            index_rate=0.42,
+            f0up_key=None,
+            auto_split=True,
+            pause_ms=None,
+            rate=openai_speed_to_rate(req.speed, voice),
+            volume="+0%",
+            pitch=None,
+            lazy_style=True,
+        )
+    )
+    output_path = transcode_audio_for_openai(result.path, response_format)
+    return FileResponse(
+        output_path,
+        media_type=OPENAI_AUDIO_MEDIA_TYPES[response_format],
+        filename=f"speech_{result.request_id}.{response_format}",
+        headers={
+            "X-Hoshino-Request-Id": result.request_id,
+            "X-Hoshino-Voice": result.voice,
+            "X-Hoshino-Model": req.model,
+            "X-Hoshino-OpenAI-Compatible": "true",
+        },
     )
 
 

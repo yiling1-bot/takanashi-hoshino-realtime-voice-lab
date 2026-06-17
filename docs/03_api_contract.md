@@ -26,6 +26,55 @@ GET /api/v1/health
 
 ## 文本转语音
 
+### OpenAI-compatible
+
+```http
+POST /v1/audio/speech
+Content-Type: application/json
+```
+
+请求体：
+
+```json
+{
+  "model": "gpt-4o-mini-tts",
+  "voice": "alloy",
+  "input": "せんせー……まだ起きてたの？",
+  "response_format": "mp3",
+  "speed": 1.0
+}
+```
+
+字段兼容 OpenAI TTS 常用参数：
+
+- `model`：兼容字段，会写入响应头，不改变本地模型
+- `input`：要合成的文本
+- `voice`：兼容字段；传 OpenAI voice 名称时仍输出本项目音色，传 Edge voice id 时作为基础 TTS 声线
+- `instructions`：兼容字段，当前不改变推理
+- `response_format`：`mp3`、`opus`、`aac`、`flac`、`wav`、`pcm`
+- `speed`：`0.25` 到 `4.0`，会映射到基础 TTS 语速
+- `stream_format`：当前只支持 `audio`，不支持 `sse`
+
+响应体是音频二进制。
+
+OpenAI SDK 示例：
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://127.0.0.1:7860/v1", api_key="local")
+
+with client.audio.speech.with_streaming_response.create(
+    model="gpt-4o-mini-tts",
+    voice="alloy",
+    input="せんせー……まだ起きてたの？",
+    response_format="mp3",
+) as response:
+    response.stream_to_file("hoshino.mp3")
+```
+
+### 原生接口
+
 ```http
 POST /api/v1/tts
 Content-Type: application/json
