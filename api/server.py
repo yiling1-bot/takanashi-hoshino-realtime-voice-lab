@@ -61,7 +61,7 @@ REALTIME_WEB_PATH = PROJECT_DIR / "web" / "realtime.html"
 CHAT_CONFIG_PATH = Path(
     os.environ.get("HOSHINO_CHAT_CONFIG", str(PROJECT_DIR / "configs" / "chat_tts_config.json"))
 )
-API_BUILD = "chat_tts_persistent_rvc_warm_20260617_021"
+API_BUILD = "chat_tts_persistent_rvc_warm_20260617_024"
 WHISPER_MODEL_NAME = os.environ.get("HOSHINO_WHISPER_MODEL", "tiny")
 WHISPER_DEVICE = os.environ.get("HOSHINO_WHISPER_DEVICE", "cpu")
 WHISPER_COMPUTE_TYPE = os.environ.get("HOSHINO_WHISPER_COMPUTE_TYPE", "int8")
@@ -420,7 +420,7 @@ def clamp(value: int, low: int, high: int) -> int:
 
 def rate_bounds(voice: str) -> tuple[int, int]:
     if is_japanese_voice(voice):
-        return -42, -24
+        return -42, -21
     return -42, -14
 
 
@@ -886,7 +886,7 @@ def synthesize(req: TtsRequest) -> SynthesisResult:
         min_pitch, max_pitch = pitch_bounds(voice)
         chunk_pitch = format_hz(clamp(base_pitch_hz + variation, min_pitch, max_pitch))
         chunk_f0up_key = f0up_key + (1 if is_japanese_voice(voice) and variation >= 6 else 0)
-        rate_delta = chunk_rate_delta(chunk, i, len(chunks), voice)
+        rate_delta = 0 if req.rate else chunk_rate_delta(chunk, i, len(chunks), voice)
         min_rate, max_rate = rate_bounds(voice)
         chunk_rate = format_percent(clamp(base_rate_percent + rate_delta, min_rate, max_rate))
         chunk_setting = {
@@ -1015,8 +1015,8 @@ async def voice_chat(
             index_rate=0.48,
             f0up_key=2 if wants_japanese(reply_language) else None,
             auto_split=False,
-            pause_ms=250,
-            rate=None,
+            pause_ms=180,
+            rate="-22%" if wants_japanese(reply_language) else None,
             pitch=None,
             lazy_style=True,
         ),
