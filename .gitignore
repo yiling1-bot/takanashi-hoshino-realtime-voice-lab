@@ -1,0 +1,26 @@
+# Training data and generated assets
+data/raw/
+data/processed/
+models/checkpoints/
+models/exported/
+outputs/
+
+# Python
+.venv/
+.venv-rvc/
+venv/
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+logs/
+
+# Local secrets
+configs/deepseek_api_key.txt
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

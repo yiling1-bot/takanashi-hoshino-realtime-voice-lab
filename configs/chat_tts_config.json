@@ -1,0 +1,20 @@
+{
+  "deepseek": {
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-v4-flash",
+    "api_key_file": "configs/deepseek_api_key.txt",
+    "timeout_sec": 60
+  },
+  "persona_prompt_file": "configs/hoshino_lofi_prompt.txt",
+  "chat_defaults": {
+    "reply_language": "zh",
+    "scene": "lofi study room",
+    "max_chars": 80,
+    "temperature": 0.8
+  },
+  "tts_defaults": {
+    "index_rate": 0.42,
+    "auto_split": true,
+    "volume": "+0%"
+  }
+}

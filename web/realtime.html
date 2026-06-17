@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hoshino Realtime Voice</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f4ee;
+      --ink: #24201c;
+      --muted: #6f675d;
+      --line: #d9d0c2;
+      --panel: #fffaf2;
+      --accent: #3a8f85;
+      --accent-strong: #24746b;
+      --warn: #b96552;
+      --soft: #e7f1ed;
+      --shadow: 0 16px 44px rgba(56, 46, 32, 0.10);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        linear-gradient(180deg, rgba(255, 250, 242, 0.88), rgba(247, 244, 238, 0.96)),
+        repeating-linear-gradient(90deg, rgba(58, 143, 133, 0.05) 0 1px, transparent 1px 72px);
+    }
+
+    main {
+      width: min(1120px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: rgba(255, 250, 242, 0.92);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .controls {
+      padding: 18px;
+      position: sticky;
+      top: 16px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 22px;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .sub {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .record {
+      width: 100%;
+      height: 72px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: white;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 12px 24px rgba(36, 116, 107, 0.22);
+    }
+
+    .record:hover { background: var(--accent-strong); }
+    .record.recording { background: var(--warn); }
+    .record:disabled { opacity: 0.62; cursor: wait; }
+
+    .row {
+      display: grid;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    select, input[type="range"] {
+      width: 100%;
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: white;
+      color: var(--ink);
+      padding: 0 10px;
+    }
+
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .meter {
+      height: 12px;
+      border-radius: 999px;
+      background: #e8ded0;
+      overflow: hidden;
+      margin-top: 14px;
+      border: 1px solid var(--line);
+    }
+
+    .meter > div {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #5aa89c, #d89b67);
+      transition: width 80ms linear;
+    }
+
+    .status {
+      min-height: 24px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .conversation {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .wave {
+      height: 132px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: linear-gradient(180deg, #fffdf8, var(--soft));
+      display: block;
+      width: 100%;
+    }
+
+    .message {
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .message:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .text {
+      min-height: 44px;
+      line-height: 1.7;
+      font-size: 16px;
+      overflow-wrap: anywhere;
+    }
+
+    audio {
+      width: 100%;
+      height: 40px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .pill {
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #efe7db;
+      border: 1px solid var(--line);
+    }
+
+    @media (max-width: 760px) {
+      main {
+        grid-template-columns: 1fr;
+        width: min(100vw - 20px, 620px);
+        padding: 10px 0 18px;
+      }
+
+      .controls {
+        position: static;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="panel controls">
+      <h1>Hoshino Voice</h1>
+      <p class="sub">语音输入，日文回答，本地 RVC 输出。</p>
+
+      <button id="recordButton" class="record">按下开始说话</button>
+
+      <div class="meter"><div id="meterFill"></div></div>
+      <div id="status" class="status">等待麦克风。</div>
+
+      <label class="toggle">
+        <input id="autoStop" type="checkbox" checked />
+        静音后自动发送
+      </label>
+
+      <div class="row">
+        <label for="inputLanguage">识别语言</label>
+        <select id="inputLanguage">
+          <option value="auto">自动识别</option>
+          <option value="zh" selected>中文</option>
+          <option value="ja">日文</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label for="silenceMs">静音判定</label>
+        <select id="silenceMs">
+          <option value="900">0.9 秒</option>
+          <option value="1200" selected>1.2 秒</option>
+          <option value="1600">1.6 秒</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="panel conversation">
+      <canvas id="wave" class="wave" width="960" height="160"></canvas>
+
+      <div class="message">
+        <div class="label">你说的话</div>
+        <div id="transcript" class="text">还没有输入。</div>
+      </div>
+
+      <div class="message">
+        <div class="label">星野的日文回复</div>
+        <div id="reply" class="text">等你说完，我会在这里回你。</div>
+        <audio id="player" controls></audio>
+        <div id="meta" class="meta"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const recordButton = document.getElementById("recordButton");
+    const statusText = document.getElementById("status");
+    const transcriptText = document.getElementById("transcript");
+    const replyText = document.getElementById("reply");
+    const player = document.getElementById("player");
+    const meta = document.getElementById("meta");
+    const meterFill = document.getElementById("meterFill");
+    const autoStop = document.getElementById("autoStop");
+    const inputLanguage = document.getElementById("inputLanguage");
+    const silenceMs = document.getElementById("silenceMs");
+    const canvas = document.getElementById("wave");
+    const ctx = canvas.getContext("2d");
+
+    let stream = null;
+    let recorder = null;
+    let chunks = [];
+    let audioContext = null;
+    let analyser = null;
+    let monitorId = 0;
+    let startedAt = 0;
+    let silentSince = 0;
+    let busy = false;
+
+    function drawIdle() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = "#b7d8d0";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      const mid = canvas.height / 2;
+      for (let x = 0; x < canvas.width; x += 8) {
+        const y = mid + Math.sin(x / 38) * 10 + Math.sin(x / 17) * 4;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    function drawWave(samples) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = "#3a8f85";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      const step = Math.max(1, Math.floor(samples.length / canvas.width));
+      const mid = canvas.height / 2;
+      for (let x = 0; x < canvas.width; x++) {
+        const v = (samples[x * step] - 128) / 128;
+        const y = mid + v * 58;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    function setStatus(text) {
+      statusText.textContent = text;
+    }
+
+    function setRecordingUi(recording) {
+      recordButton.classList.toggle("recording", recording);
+      recordButton.textContent = recording ? "正在听，点我结束" : "按下开始说话";
+    }
+
+    async function ensureStream() {
+      if (stream) return stream;
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      return stream;
+    }
+
+    async function startRecording() {
+      if (busy) return;
+      chunks = [];
+      const activeStream = await ensureStream();
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : "";
+      recorder = new MediaRecorder(activeStream, mimeType ? { mimeType } : undefined);
+      recorder.ondataavailable = event => {
+        if (event.data && event.data.size > 0) chunks.push(event.data);
+      };
+      recorder.onstop = sendRecording;
+      recorder.start(120);
+
+      audioContext = audioContext || new AudioContext();
+      const source = audioContext.createMediaStreamSource(activeStream);
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 1024;
+      source.connect(analyser);
+
+      startedAt = performance.now();
+      silentSince = 0;
+      setRecordingUi(true);
+      setStatus("正在听。说完后停一下，我会自动发送。");
+      monitorAudio();
+    }
+
+    function stopRecording() {
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop();
+      }
+      cancelAnimationFrame(monitorId);
+      setRecordingUi(false);
+    }
+
+    function monitorAudio() {
+      if (!analyser || !recorder || recorder.state !== "recording") return;
+      const data = new Uint8Array(analyser.fftSize);
+      analyser.getByteTimeDomainData(data);
+      drawWave(data);
+
+      let sum = 0;
+      for (const value of data) {
+        const centered = (value - 128) / 128;
+        sum += centered * centered;
+      }
+      const rms = Math.sqrt(sum / data.length);
+      meterFill.style.width = `${Math.min(100, Math.round(rms * 260))}%`;
+
+      const now = performance.now();
+      if (autoStop.checked && now - startedAt > 900) {
+        if (rms < 0.018) {
+          if (!silentSince) silentSince = now;
+          if (now - silentSince >= Number(silenceMs.value)) stopRecording();
+        } else {
+          silentSince = 0;
+        }
+      }
+      monitorId = requestAnimationFrame(monitorAudio);
+    }
+
+    async function sendRecording() {
+      if (!chunks.length) {
+        setStatus("没有录到声音。");
+        return;
+      }
+      busy = true;
+      recordButton.disabled = true;
+      setStatus("识别中，然后生成日文回复。");
+      meterFill.style.width = "0%";
+
+      const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+      const form = new FormData();
+      form.append("audio", blob, "voice.webm");
+      form.append("input_language", inputLanguage.value);
+      form.append("reply_language", "ja");
+      form.append("scene", "quiet lofi night study room, lazy soft Hoshino-like senpai tone, very short reply");
+      form.append("max_chars", "55");
+      form.append("temperature", "0.68");
+
+      const started = performance.now();
+      try {
+        const response = await fetch("/api/v1/voice-chat", { method: "POST", body: form });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail ? JSON.stringify(payload.detail) : response.statusText);
+
+        transcriptText.textContent = payload.transcript || "没有识别到文字。";
+        replyText.textContent = payload.reply || "";
+        player.src = `${payload.audio_url}?t=${Date.now()}`;
+        await player.play().catch(() => {});
+
+        const elapsed = ((performance.now() - started) / 1000).toFixed(1);
+        meta.innerHTML = "";
+        for (const item of [
+          `识别：${payload.transcript_language}`,
+          `Whisper：${payload.whisper_model}`,
+          `用时：${elapsed}s`,
+          payload.timings ? `ASR：${payload.timings.transcribe_sec}s` : "",
+          payload.timings ? `LLM：${payload.timings.chat_sec}s` : "",
+          payload.timings ? `TTS：${payload.timings.tts_sec}s` : "",
+          `ID：${payload.request_id.slice(0, 8)}`
+        ].filter(Boolean)) {
+          const span = document.createElement("span");
+          span.className = "pill";
+          span.textContent = item;
+          meta.appendChild(span);
+        }
+        setStatus("播放中。");
+      } catch (error) {
+        setStatus(`出错了：${error.message}`);
+      } finally {
+        busy = false;
+        recordButton.disabled = false;
+        setRecordingUi(false);
+        drawIdle();
+      }
+    }
+
+    recordButton.addEventListener("click", async () => {
+      if (recorder && recorder.state === "recording") {
+        stopRecording();
+        return;
+      }
+      try {
+        await startRecording();
+      } catch (error) {
+        setStatus(`麦克风不可用：${error.message}`);
+      }
+    });
+
+    drawIdle();
+  </script>
+</body>
+</html>
