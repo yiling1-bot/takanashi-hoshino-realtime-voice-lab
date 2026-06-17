@@ -1,7 +1,7 @@
 [project]
 name = "takanashi-hoshino-realtime-voice-lab"
 version = "0.2.0"
-description = "小鸟游星野 Realtime Voice Lab: local realtime ASR, character chat, TTS, and RVC voice conversion."
+description = "小鸟游星野实时语音对话：本地录音识别、AI 日文回复、TTS + RVC 变声输出。Realtime Hoshino voice chat with local ASR, AI Japanese replies, TTS, and RVC."
 readme = "README.md"
 requires-python = ">=3.10,<3.11"
 license = { text = "MIT" }

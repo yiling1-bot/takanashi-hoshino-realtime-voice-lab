@@ -1,6 +1,8 @@
 # 小鸟游星野 Realtime Voice Lab
 
-一个本地运行的实时语音对话实验项目：浏览器录音 -> Whisper 识别 -> DeepSeek 生成日文角色回复 -> Edge TTS 基础音频 -> 本地 RVC 转换输出。
+一个本地运行的实时语音对话项目：浏览器录音识别，AI 生成日文回复，再用 TTS + RVC 输出“小鸟游星野风格”的语音。
+
+Realtime Hoshino-style voice chat: record speech in the browser, transcribe it locally, generate a Japanese reply, then output speech through TTS + RVC voice conversion.
 
 项目目标是做一个低延迟、偏慵懒、柔软、日常对话感的“小鸟游星野风格”语音接口。仓库不包含训练数据、官方素材、模型权重、API key 或生成音频。
 
